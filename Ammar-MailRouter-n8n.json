@@ -1,0 +1,355 @@
+{
+  "name": "Ammar-MailRouter-n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "includeSpamTrash": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "860614d9-0b60-401b-add9-1ab46a9ad1e2",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FrezyMWxa0ZuUvLQ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an email classification assistant.\nAnalyze the email and determine whether it is IMPORTANT or NOT_IMPORTANT.\n\nIMPORTANT emails include:\n- Client communications\n- Business opportunities\n- Meeting requests\n- Urgent messages\n- Payment or invoice updates\n- Project updates\n- High-priority work-related discussions\n\nNOT_IMPORTANT emails include:\n- Promotions\n- Marketing emails\n- Newsletters\n- Spam\n- Social notifications\n- Automated low-priority notifications\n\nEmail to analyze:\nSender: {{ $('Gmail Trigger').item.json.snippet }}\nSubject: {{ $('Gmail Trigger').item.json.snippet }}\nBody: {{ $('Gmail Trigger').item.json.snippet }}\n\nReturn ONLY valid JSON in this exact format:\n{\n  \"classification\": \"IMPORTANT\",\n  \"reason\": \"Short explanation\"\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        144,
+        -16
+      ],
+      "id": "6855cccc-1aed-4e3e-8768-da16c112dce1",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "R9C8gVDJDUwSonI7",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f72f0042-af7b-4bb4-a3aa-ec88237aa26c",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "IMPORTANT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "0f095df8-28c9-4453-a1d4-0d59b05f7048",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1216,
+        -128
+      ],
+      "id": "4f4440cd-8310-40e4-93c1-613ebb9a9221",
+      "name": "Mark a message as read",
+      "webhookId": "7cca35a5-9c24-4ab5-b578-fb5355465278",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FrezyMWxa0ZuUvLQ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the JSON string coming inside text from Gemini\nconst rawText = $input.item.json.content.parts[0].text;\nconst parsedData = JSON.parse(rawText);\n\nreturn {\n  json: {\n    classification: parsedData.classification,\n    reason: parsedData.reason\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -128
+      ],
+      "id": "fd9167ae-ce42-4010-9ac8-fb4def7137e8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot7856284789:AAF5U9BJzZLHgNDNUswToBg18lUq1LSKZ2g/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  JSON.stringify({\n    chat_id: \"7031761843\",\n    text: `📧 Important Email Detected\\n\\nFrom: ${$('Gmail Trigger').item.json.From}\\nSubject: ${$('Gmail Trigger').item.json.Subject}\\n\\nReason:\\n${$json.reason}`\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        816,
+        -128
+      ],
+      "id": "5a25c77e-fa94-42c5-93c0-0bcc6f8c2557",
+      "name": "telegram notifier"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=📧 Important Email Detected\n\nFrom: {{ $('Gmail Trigger').item.json.From }}\nSubject: {{ $('Gmail Trigger').item.json.Subject }}\n\nReason:\n{{ $('Code in JavaScript').item.json.reason }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -128
+      ],
+      "id": "295e99c1-52c7-4159-bf99-889d617a7125",
+      "name": "Discord notifier",
+      "webhookId": "21a4790d-8f60-4ee4-a360-182aa95256ec",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "eJIXKRLwy7L6VTJf",
+          "name": "Discord Webhook account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot7856284789:AAF5U9BJzZLHgNDNUswToBg18lUq1LSKZ2g/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"7031761843\",\n  \"text\": \"🗑️ Unimportant Email Auto-set into Trash\\n\\nSubject: {{ $('Gmail Trigger').item.json.Subject }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1024,
+        112
+      ],
+      "id": "7554c7b7-2507-45f6-91cd-6836ce3432fd",
+      "name": "telegram_Delete Notifier"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Message Text:\n🗑️ Unimportant Email Auto-set into Trash\nSubject: {{ $('Gmail Trigger').item.json.Subject }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        112
+      ],
+      "id": "44fe5ce9-4af8-49f6-8238-716ebcabab4b",
+      "name": "Discord_Delete Notifier",
+      "webhookId": "21a4790d-8f60-4ee4-a360-182aa95256ec",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "eJIXKRLwy7L6VTJf",
+          "name": "Discord Webhook account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "labelIds": [
+          "TRASH"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        16
+      ],
+      "id": "d3a0994b-efb8-49a1-bbe5-b2a96a2531d4",
+      "name": "Add message into Trash",
+      "webhookId": "48a6bdb7-cf72-4737-bb98-1976c292436a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FrezyMWxa0ZuUvLQ",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "telegram notifier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add message into Trash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark a message as read": {
+      "main": [
+        []
+      ]
+    },
+    "telegram notifier": {
+      "main": [
+        [
+          {
+            "node": "Discord notifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord notifier": {
+      "main": [
+        [
+          {
+            "node": "Mark a message as read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "telegram_Delete Notifier": {
+      "main": [
+        [
+          {
+            "node": "Discord_Delete Notifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add message into Trash": {
+      "main": [
+        [
+          {
+            "node": "telegram_Delete Notifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f5b29b16-b969-4081-bb2e-3acb8315615f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "09df8e3e641c937c080036404197589564810b6178e843498c850cc0395430bd"
+  },
+  "nodeGroups": [],
+  "id": "UCRxxdGw3FoDJxQY",
+  "tags": []
+}
